@@ -2,6 +2,7 @@ import pygame
 import random
 from enum import Enum
 from collections import namedtuple
+import numpy as np
 
 pygame.init()
 font = pygame.font.Font('arial.ttf', 25) # it means you need to have 'arial.ttf' in the same directory as this script
@@ -37,22 +38,39 @@ class SnakeGame: # This class encapsulates the game logic and state
         self.display = pygame.display.set_mode((self.w, self.h)) # creates a window of size w x h, pygame.display.set_mode() initializes the game window
         pygame.display.set_caption('Snake') # sets the title of the game window
         self.clock = pygame.time.Clock() # creates a clock object to control the frame rate of the game i.e. how fast the game updates
+        self.reset() # reset the game state to the initial state, this method initializes the game state variables such as direction, snake position, food position, and score
         
-        # init game state
-        self.direction = Direction.RIGHT # initial direction of the snake, Direction is an enum that represents the direction of the snake
+        # # init game state
+        # self.direction = Direction.RIGHT # initial direction of the snake, Direction is an enum that represents the direction of the snake
         
-        self.head = Point(self.w/2, self.h/2) # initial position of the snake's head, Point is a namedtuple that represents a point in 2D space
-        # here the head is placed at the center of the game window as Point for the snake's head is initialized with the center coordinates of the window
+        # self.head = Point(self.w/2, self.h/2) # initial position of the snake's head, Point is a namedtuple that represents a point in 2D space
+        # # here the head is placed at the center of the game window as Point for the snake's head is initialized with the center coordinates of the window
+        # self.snake = [self.head, 
+        #               Point(self.head.x-BLOCK_SIZE, self.head.y),
+        #               Point(self.head.x-(2*BLOCK_SIZE), self.head.y)]
+        # # initial snake body, the snake is represented as a list of Points, where each Point is a segment of the snake's body
+        # # the snake starts with 3 segments, the head and two segments behind it, first segment is the head, second segment is one block to the left 
+        # # of the head, and third segment is two blocks to the left of the head, y coordinate remains the same for all segments
+        
+        # self.score = 0 # initial score of the game, score is incremented when the snake eats food
+        # self.food = None
+        # self._place_food() # places the first food item on the game board, this method randomly places food on the game board
+        
+        
+        
+    def reset(self): # this method resets the game state to the initial state
+        self.direction = Direction.RIGHT 
+        
+        self.head = Point(self.w/2, self.h/2) 
         self.snake = [self.head, 
                       Point(self.head.x-BLOCK_SIZE, self.head.y),
                       Point(self.head.x-(2*BLOCK_SIZE), self.head.y)]
-        # initial snake body, the snake is represented as a list of Points, where each Point is a segment of the snake's body
-        # the snake starts with 3 segments, the head and two segments behind it, first segment is the head, second segment is one block to the left 
-        # of the head, and third segment is two blocks to the left of the head, y coordinate remains the same for all segments
         
-        self.score = 0 # initial score of the game, score is incremented when the snake eats food
+        self.score = 0 
         self.food = None
-        self._place_food() # places the first food item on the game board, this method randomly places food on the game board
+        self._place_food() 
+        self.frame_iteration = 0 # this variable is used to keep track of the number of frames that have been played, it can be used for debugging or other purposes
+        
         
     def _place_food(self): # this method places food on the game board at a random position
         x = random.randint(0, (self.w-BLOCK_SIZE )//BLOCK_SIZE )*BLOCK_SIZE # random x coordinate for food, it ensures that the food is placed 
@@ -62,39 +80,36 @@ class SnakeGame: # This class encapsulates the game logic and state
         if self.food in self.snake: # if food is placed on the snake, place it again
             self._place_food()
         
-    def play_step(self): # this is core method that runs one step of the game, it handles user input, moves the snake, checks for collisions, and 
+    def play_step(self,action): # this is core method that runs one step of the game, it handles user input, moves the snake, checks for collisions, and 
         # updates the game state
+        self.frame_iteration += 1 # increment the frame iteration, this keeps track of how many frames have been played
         # 1. collect user input
         for event in pygame.event.get(): # get all events from the event queue, pygame.event.get() returns a list of events that have occurred since the last call
             # event queue is a list of events that have occurred in the game, such as key presses, mouse movements, etc.
             if event.type == pygame.QUIT: # if the user closes the game window this event is triggered
                 pygame.quit() # quits the game
                 quit() # exits the game
-            if event.type == pygame.KEYDOWN: # if user presses a key this event is triggered, KEYDOWN means a key was pressed down
-                if event.key == pygame.K_LEFT: # if the left arrow key is pressed,pygame.K_LEFT is a constant that represents the left arrow key
-                    self.direction = Direction.LEFT # change the direction of the snake to left
-                elif event.key == pygame.K_RIGHT: # if the right arrow key is pressed 
-                    self.direction = Direction.RIGHT # change the direction of the snake to right
-                elif event.key == pygame.K_UP:
-                    self.direction = Direction.UP
-                elif event.key == pygame.K_DOWN:
-                    self.direction = Direction.DOWN
+
         
         # 2. move
-        self._move(self.direction) # update the position of the snake's head based on the current direction, this method updates the head position 
+        self._move(action) # update the position of the snake's head based on the current direction, this method updates the head position 
         # based on the direction of the snake
         self.snake.insert(0, self.head) # .insert takes an index and an element, it inserts the head at the beginning of the snake list
         # this adds the new head position to the front of the snake list, so the snake grows in length, snake list is a list of Points representing the snake's body
         
         # 3. check if game over
+        reward = 0 # initialize reward to 0, it can be used for reinforcement learning purposes, but in this case, it is not used
         game_over = False # initialize game_over to False, it will be set to True if the snake collides with itself or the boundaries of the game window
-        if self._is_collision(): # check for collisions, this method checks if the snake has collided with itself or the boundaries of the game window
+        if self._is_collision() or self.frame_iteration > 100*len(self.snake): # check for collisions, this method checks if the snake has collided with 
+            #itself or the boundaries of the game window or if the snake has been alive for too long (more than 100 times its length)
             game_over = True
-            return game_over, self.score # if there is a collision, return game_over and score
+            reward = -10 # if there is a collision, set reward to -10, this can be used for reinforcement learning purposes
+            return reward, game_over, self.score # if there is a collision, return game_over and score
             
         # 4. place new food or just move
         if self.head == self.food: # if the snake's head is at the same position as the food, it means the snake has eaten the food
             self.score += 1 # increment the score by 1
+            reward = 10 # set reward to 10, this can be used for reinforcement learning purposes
             self._place_food() # place new food at a random position, this method places food at a random position on the game board
         else:
             self.snake.pop() # remove the last segment of the snake, this keeps the snake's length constant if it hasn't eaten food, .pop() removes the last element from the list
@@ -103,15 +118,17 @@ class SnakeGame: # This class encapsulates the game logic and state
         self._update_ui() # update the game display, this method updates the game display by drawing the snake and food on the screen using pygame's drawing functions
         self.clock.tick(SPEED) # control the frame rate of the game, this method limits the game to run at a certain speed, SPEED is the number of frames per second
         # 6. return game over and score
-        return game_over, self.score # return the game_over status and the current score after processing the step
+        return reward, game_over, self.score # return the game_over status and the current score after processing the step
     
-    def _is_collision(self):
+    def _is_collision(self,pt=None):
+        if pt is None: # if pt is not provided, use the snake's head position
+            pt = self.head
         # hits boundary
-        if self.head.x > self.w - BLOCK_SIZE or self.head.x < 0 or self.head.y > self.h - BLOCK_SIZE or self.head.y < 0:
+        if pt.x > self.w - BLOCK_SIZE or pt.x < 0 or pt.y > self.h - BLOCK_SIZE or pt.y < 0:
         # if the head of the snake is outside the boundaries of the game window, it means the snake has collided with the boundary
             return True
         # hits itself
-        if self.head in self.snake[1:]: # if the head of the snake is in the snake list excluding the first element (the head itself), it means the snake has collided with itself
+        if pt in self.snake[1:]: # if the head of the snake is in the snake list excluding the first element (the head itself), it means the snake has collided with itself
             return True
         
         return False
@@ -132,33 +149,32 @@ class SnakeGame: # This class encapsulates the game logic and state
         self.display.blit(text, [0, 0]) # blit() draws the text surface on the game display at the specified position, here it is drawn at the top left corner of the screen
         pygame.display.flip() # update the display to show the new frame, pygame.display.flip() updates the entire display surface to the screen
         
-    def _move(self, direction): # this method updates the position of the snake's head based on the current direction
+    def _move(self, action): # this method updates the position of the snake's head based on the current direction
+        
+        clock_wise = [Direction.RIGHT, Direction.DOWN, Direction.LEFT, Direction.UP] # list of directions in clockwise order
+        idx = clock_wise.index(self.direction) # get the index of the current direction in the clockwise list
+        
+        if np.array_equal(action, [1, 0, 0]): # if the action is to move right
+            new_dir = clock_wise[idx] # keep the current direction
+        elif np.array_equal(action, [0, 1, 0]): # if the action is to move down
+            new_dir = clock_wise[(idx + 1) % 4] # change
+            # to the next direction in the clockwise list, % 4 ensures that the index wraps around if it goes beyond the last index
+        else:
+            new_dir = clock_wise[(idx - 1) % 4] # change to the previous direction in the clockwise list, % 4 ensures that the index wraps around if it goes below 0
+            
+        self.direction = new_dir
+        
         x = self.head.x # get the current x coordinate of the snake's head 
         y = self.head.y
-        if direction == Direction.RIGHT: # if the direction is right, move the head to the right by BLOCK_SIZE
+        if self.direction == Direction.RIGHT: # if the direction is right, move the head to the right by BLOCK_SIZE
             x += BLOCK_SIZE
-        elif direction == Direction.LEFT: # if the direction is left, move the head to the left by BLOCK_SIZE
+        elif self.direction == Direction.LEFT: # if the direction is left, move the head to the left by BLOCK_SIZE
             x -= BLOCK_SIZE
-        elif direction == Direction.DOWN: # if the direction is down, move the head down by BLOCK_SIZE
+        elif self.direction == Direction.DOWN: # if the direction is down, move the head down by BLOCK_SIZE
             y += BLOCK_SIZE
-        elif direction == Direction.UP:
+        elif self.direction == Direction.UP:
             y -= BLOCK_SIZE
             
         self.head = Point(x, y) # update the head position with the new coordinates, this creates a new Point for the head with the updated x and y coordinates
             
 
-if __name__ == '__main__':
-    game = SnakeGame() # create an instance of the SnakeGame class, this initializes the game and sets up the game window, snake, food, and other 
-    # game state variables
-    
-    # game loop
-    while True:
-        game_over, score = game.play_step() # play a step of the game, this method handles user input, moves the snake, checks for collisions, and updates the game state
-        
-        if game_over == True: # if the game is over, break the loop
-            break
-        
-    print('Final Score', score) # print the final score when the game is over
-        
-        
-    pygame.quit() # quit the game when the game loop ends, this closes the game window and cleans up resources
