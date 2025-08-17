@@ -100,7 +100,7 @@ class SnakeGame: # This class encapsulates the game logic and state
         # 3. check if game over
         reward = 0 # initialize reward to 0, it can be used for reinforcement learning purposes, but in this case, it is not used
         game_over = False # initialize game_over to False, it will be set to True if the snake collides with itself or the boundaries of the game window
-        if self._is_collision() or self.frame_iteration > 100*len(self.snake): # check for collisions, this method checks if the snake has collided with 
+        if self.is_collision() or self.frame_iteration > 100*len(self.snake): # check for collisions, this method checks if the snake has collided with 
             #itself or the boundaries of the game window or if the snake has been alive for too long (more than 100 times its length)
             game_over = True
             reward = -10 # if there is a collision, set reward to -10, this can be used for reinforcement learning purposes
@@ -120,7 +120,7 @@ class SnakeGame: # This class encapsulates the game logic and state
         # 6. return game over and score
         return reward, game_over, self.score # return the game_over status and the current score after processing the step
     
-    def _is_collision(self,pt=None):
+    def is_collision(self,pt=None):
         if pt is None: # if pt is not provided, use the snake's head position
             pt = self.head
         # hits boundary
