@@ -23,67 +23,73 @@ class Agent:
         # self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
     
     def get_state(self, game): # get the current state of the game at a given time
-            head = game.snake[0]
-            point_l = Point(head.x - 20, head.y)
-            point_r = Point(head.x + 20, head.y)
+            head = game.snake[0] # the head of the snake
+            # points one block away from the head in each direction (used for collision checks)
+            point_l = Point(head.x - 20, head.y) # point to the left of the head to check for collision, if snake is moving left if point_l macthes the left wall point or snake's body, it will be a collision
+            point_r = Point(head.x + 20, head.y) # point to the right of the head to check for collision, if snake is moving right if point_r matches the right wall point or snake's body, it will be a collision
             point_u = Point(head.x, head.y - 20)
             point_d = Point(head.x, head.y + 20)
             
+            # checking the direction of the snake
+            # if the snake is moving left, dir_l will be True, else False, game.direction will be given by the game object if it matches the Direction enum for left, right, up or down
+            # the snake will be moving in one of the four directions, so we check if the game.direction matches any of the four directions
             dir_l = game.direction == Direction.LEFT
             dir_r = game.direction == Direction.RIGHT
             dir_u = game.direction == Direction.UP
             dir_d = game.direction == Direction.DOWN
 
             state = [ # Current state of the game in the form of a list 
-                # Danger straight
-                (dir_r and game.is_collision(point_r)) or 
-                (dir_l and game.is_collision(point_l)) or 
+                # Feature 1: Danger straight ahead - Will snake collide if it continues in current direction?
+                (dir_r and game.is_collision(point_r)) or # If moving right, check collision to the right
+                (dir_l and game.is_collision(point_l)) or  # If moving left, check collision to the left
                 (dir_u and game.is_collision(point_u)) or 
                 (dir_d and game.is_collision(point_d)),
 
-                # Danger right
-                (dir_u and game.is_collision(point_r)) or 
-                (dir_d and game.is_collision(point_l)) or 
+                # Feature 2: Danger to the right - Will snake collide if it turns right from current direction?
+                (dir_u and game.is_collision(point_r)) or # if moving up, will point right to us give a collision?
+                (dir_d and game.is_collision(point_l)) or # if moving down, will point left to us give a collision?
                 (dir_l and game.is_collision(point_u)) or 
                 (dir_r and game.is_collision(point_d)),
 
-                # Danger left
-                (dir_d and game.is_collision(point_r)) or 
-                (dir_u and game.is_collision(point_l)) or 
+                # Feature 3: Danger to the left - Will snake collide if it turns left from current direction?
+                (dir_d and game.is_collision(point_r)) or # if moving down, will point right to us give a collision?
+                (dir_u and game.is_collision(point_l)) or  # if moving up, will point left to us give a collision?
                 (dir_r and game.is_collision(point_u)) or 
                 (dir_l and game.is_collision(point_d)),
                 
-                # Move direction
-                dir_l,
+                # Features 4-7: Current movement direction (one-hot encoding - only one will be True)
+                dir_l, # true if moving left
                 dir_r,
                 dir_u,
                 dir_d,
                 
-                # Food location 
-                game.food.x < game.head.x,  # food left
-                game.food.x > game.head.x,  # food right
+                # Features 8-11: Food location relative to snake's head (binary indicators)
+                game.food.x < game.head.x,  # true if food is left of the snake's head
+                game.food.x > game.head.x,  # true if food is right of the snake's head
                 game.food.y < game.head.y,  # food up
                 game.food.y > game.head.y  # food down
                 ]
 
-            return np.array(state, dtype=int)
+            return np.array(state, dtype=int) # convert the state to a numpy array of integers, dtype=int ensures that the array is of integer type
     
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, state, action, reward, next_state, done): # remember the state, action, reward, next state and done status for training later
         self.memory.append((state, action, reward, next_state, done)) # popleft if MAX_MEMORY is reached
 
-    def train_long_memory(self):
+    def train_long_memory(self): # train the agent using the long memory i.e. the memory of all the states, actions, rewards, next states and done status
+        # if the memory is greater than BATCH_SIZE, then sample a random batch of BATCH_SIZE from the memory
+        # else, use the entire memory
         if len(self.memory) > BATCH_SIZE:
             mini_sample = random.sample(self.memory, BATCH_SIZE) # list of tuples
         else:
             mini_sample = self.memory
 
-        states, actions, rewards, next_states, dones = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones)
+        states, actions, rewards, next_states, dones = zip(*mini_sample) # unzip the mini_sample into five lists: states, actions, rewards, next_states and dones
+        self.trainer.train_step(states, actions, rewards, next_states, dones) # train the agent using the mini_sample, this will call the train_step method of the trainer which will use the model to predict the Q values and update the weights of the model
         #for state, action, reward, nexrt_state, done in mini_sample:
         #    self.trainer.train_step(state, action, reward, next_state, done)
 
-    def train_short_memory(self, state, action, reward, next_state, done):
-        self.trainer.train_step(state, action, reward, next_state, done)
+    def train_short_memory(self, state, action, reward, next_state, done): # train the agent using the short memory i.e. the current state, action, reward, next state and done status
+        self.trainer.train_step(state, action, reward, next_state, done) # train the agent using the current state, action, reward, next state and done status
 
     def get_action(self, state):
         # random moves: tradeoff exploration / exploitation
