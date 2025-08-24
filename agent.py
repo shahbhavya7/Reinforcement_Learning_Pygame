@@ -3,7 +3,7 @@ import random
 import numpy as np
 from collections import deque
 from game import SnakeGameAI, Direction, Point
-# from model import Linear_QNet, QTrainer
+from model import Linear_QNet, QTrainer
 # from helper import plot
 
 
@@ -19,8 +19,8 @@ class Agent:
         self.epsilon = 0 # randomness , it helps in exploration
         self.gamma = 0.9 # discount rate , # future rewards are discounted as they are less important than immediate rewards
         self.memory = deque(maxlen=MAX_MEMORY) # popleft() , # if memory is full, remove the oldest element
-        # self.model = Linear_QNet(11, 256, 3)
-        # self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+        self.model = Linear_QNet(11, 256, 3) # input size = 11, hidden size = 256, output size = 3, # 11 input features, 3 possible actions (straight, right, left)
+        self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma) # initialize the trainer with the model, learning rate and discount factor
     
     def get_state(self, game): # get the current state of the game at a given time
             head = game.snake[0] # the head of the snake
@@ -85,26 +85,28 @@ class Agent:
 
         states, actions, rewards, next_states, dones = zip(*mini_sample) # unzip the mini_sample into five lists: states, actions, rewards, next_states and dones
         self.trainer.train_step(states, actions, rewards, next_states, dones) # train the agent using the mini_sample, this will call the train_step method of the trainer which will use the model to predict the Q values and update the weights of the model
-        #for state, action, reward, nexrt_state, done in mini_sample:
+        # for state, action, reward, next_state, done in mini_sample: 
         #    self.trainer.train_step(state, action, reward, next_state, done)
 
     def train_short_memory(self, state, action, reward, next_state, done): # train the agent using the short memory i.e. the current state, action, reward, next state and done status
         self.trainer.train_step(state, action, reward, next_state, done) # train the agent using the current state, action, reward, next state and done status
 
     def get_action(self, state):
-        # random moves: tradeoff exploration / exploitation
-        self.epsilon = 80 - self.n_games
-        final_move = [0,0,0]
-        if random.randint(0, 200) < self.epsilon:
-            move = random.randint(0, 2)
-            final_move[move] = 1
-        else:
-            state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model(state0)
-            move = torch.argmax(prediction).item()
-            final_move[move] = 1
+        # random moves: tradeoff exploration / exploitation i.e we want to explore the environment by making random moves, but we also want to exploit the 
+        # knowledge we have gained by making the best possible move
+        self.epsilon = 80 - self.n_games # decrease epsilon as the number of games increases, so that the agent explores less and exploits more
+        # At the start (few games played), epsilon is high → more random moves. Later (many games played), epsilon is low → more smart moves. so less randomness
+        final_move = [0,0,0] # initalize the final move as a list of three zeros, representing [straight, right, left], it will be modified later based on the action chosen by the agent
+        if random.randint(0, 200) < self.epsilon: # if a random number between 0 and 200 is less than epsilon, make a random move as the agent is still exploring
+            move = random.randint(0, 2) # choose a random move between 0 and 2 , 0 = straight, 1 = right, 2 = left
+            final_move[move] = 1 # set the chosen move to 1 in the final_move list, so if move = 1, final_move = [0, 1, 0] i.e. turn right
+        else: # predict the move based on the current state as the agent has explored enough
+            state0 = torch.tensor(state, dtype=torch.float) # convert the state to a tensor of floats for the model to process
+            prediction = self.model(state0) # get the prediction from the model, this will be a tensor of three values representing the Q values for each action
+            move = torch.argmax(prediction).item() # get the index of the action with the highest Q value, this will be 0, 1 or 2
+            final_move[move] = 1 # set the chosen move to 1 in the final_move list
 
-        return final_move
+        return final_move # return the final move list representing the action to be taken
 
 
 def train():
@@ -131,7 +133,7 @@ def train():
         # remember the old state, action, reward, new state and done status for storing in memory
         agent.remember(state_old, final_move, reward, state_new, done)
 
-        if done:
+        if done: # if the game is over
             # train long memory, plot result
             game.reset()  # reset the game as the game is done
             agent.n_games += 1 # increment number of games played
